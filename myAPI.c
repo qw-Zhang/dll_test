@@ -512,6 +512,66 @@ _DLL_API void sample_symbol_mapping(cmplx128 *in, cmplx128 * Zarray, int a, int 
 			
 }
 
+_DLL_API void early_late(cmplx128 * in, cmplx128 * out, int IQrate_rate, int length)
+{
+	//目前假设接收IQ速率是发送端的10倍。发：500k，接收：5M
+	int result = 0;
+	float sum = 0;
+	float temp = 0;
+	int now = 1000; //因为上述速率中10ms接收50000个数据点，所以开头设为1000可以接受
+	for (int i = 1; i < 6; i++) {
+		sum = sum + in[now + i].re;
+		sum = sum + in[now - i].re;
+		sum = sum + in[now].re;
+	}
+	temp = in[now - 1].re + in[now - 2].re - in[now + 1].re + in[now + 2].re; //前几个数据减后几个数据, 可以判断是上沿还是下沿。
+	//sum若>0,则说明该采样点较正值较近,再判断在正值的左右上下沿;<0同理
+	if (sum > 0) {
+		if (temp > 0) { // >0说明是下降沿
+			for (int n = 0; n < 6; n++) {
+				if (in[now - n].re > in[now - n - 1].re) {
+					result = now - n;
+					break;
+				}
+			}
+		}
+		else { //上升沿
+			for (int n = 0; n < 6; n++) {
+				if (in[now + n].re > in[now + n + 1].re) {
+					result = now + n;
+					break;
+				}
+			}
+		}
+	}
+	// 采样点在负值附近
+	else {
+		if (temp > 0) { // >0说明是下降沿
+			for (int n = 0; n < 6; n++) {
+				if (in[now + n].re < in[now + n + 1].re) {
+					result = now + n;
+					break;
+				}
+			}
+		}
+		else { //上升沿
+			for (int n = 0; n < 6; n++) {
+				if (in[now - n].re < in[now - n - 1].re) {
+					result = now - n;
+					break;
+				}
+			}
+		}
+	}
+	//temp此时为较好的一个采样点，此时可以生成out数组，进行处理
+	int i = result;
+	for (int m = 0; m<length; m++) {  //length为需要进行解码的数组的长度
+		out[m].re = in[i].re;
+		out[m].im = in[i].im;
+		i = i + IQrate_rate;  //接收端IQ速率与发送端的比值
+	}
+}
+
 _DLL_API void demod_test(cmplx128 *in, cmplx128 *out, int length, int len_symbol)
 {
 
